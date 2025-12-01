@@ -9,9 +9,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
-# Baru load model
-model = joblib.load('model_churn_terbaik.joblib')
-
 # Load Model
 model = joblib.load('model_churn_terbaik.joblib')
 
@@ -86,3 +83,4 @@ if st.button('Prediksi Churn'):
     else:
 
         st.success(f"Prediksi: TIDAK CHURN (Tetap Berlangganan). Probabilitas: {probability[0][0]:.2f}")
+
