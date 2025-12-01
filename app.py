@@ -1,16 +1,24 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import numpy as np
 
+# --- IMPORT WAJIB AGAR JOBLIB BISA MEMBACA MODEL ---
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.impute import SimpleImputer
 
 # Load Model
-model = joblib.load('model_churn_terbaik.joblib')
+try:
+    model = joblib.load('model_churn_terbaik.joblib')
+except Exception as e:
+    st.error(f"Gagal memuat model: {e}")
+    st.stop()
 
 st.title("Aplikasi Prediksi Churn Pelanggan Telco")
 st.write("Dibuat untuk UAS Bengkel Koding Data Science")
@@ -83,4 +91,5 @@ if st.button('Prediksi Churn'):
     else:
 
         st.success(f"Prediksi: TIDAK CHURN (Tetap Berlangganan). Probabilitas: {probability[0][0]:.2f}")
+
 
