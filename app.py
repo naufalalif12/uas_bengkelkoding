@@ -2,6 +2,16 @@ import streamlit as st
 import pandas as pd
 import joblib
 
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+# Baru load model
+model = joblib.load('model_churn_terbaik.joblib')
+
 # Load Model
 model = joblib.load('model_churn_terbaik.joblib')
 
@@ -74,4 +84,5 @@ if st.button('Prediksi Churn'):
     if prediction[0] == 1:
         st.error(f"Prediksi: CHURN (Berhenti Berlangganan). Probabilitas: {probability[0][1]:.2f}")
     else:
+
         st.success(f"Prediksi: TIDAK CHURN (Tetap Berlangganan). Probabilitas: {probability[0][0]:.2f}")
