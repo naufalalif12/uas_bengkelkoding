@@ -3,71 +3,79 @@ import pandas as pd
 import joblib
 import numpy as np
 
-# --- 1. IMPORT LIB PENDUKUNG (PENTING AGAR MODEL TERBACA) ---
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+# Import library Scikit-Learn agar joblib mengenali struktur model
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 
-# --- 2. LOAD MODEL ---
-st.title("Aplikasi Prediksi Churn Pelanggan")
-st.write("UAS Bengkel Koding - Data Science")
+# Judul Aplikasi
+st.title("Telco Customer Churn Prediction")
+st.write("Aplikasi Prediksi Berhenti Langganan (UAS Data Science)")
 
+# Load Model dengan Error Handling
 try:
     model = joblib.load('model_churn_terbaik.joblib')
 except Exception as e:
-    st.error(f"Gagal memuat model. Error: {e}")
+    st.error(f"Error memuat model: {e}")
     st.stop()
 
-# --- 3. INPUT USER (SIDEBAR) ---
-st.sidebar.header("Masukkan Data Pelanggan")
+st.sidebar.header("Input Data Pelanggan")
 
+# Fungsi Input User
 def user_input_features():
     # Input Numerik
     tenure = st.sidebar.number_input('Lama Berlangganan (Bulan)', min_value=0, value=12)
-    MonthlyCharges = st.sidebar.number_input('Biaya Bulanan', min_value=0.0, value=50.0)
-    TotalCharges = st.sidebar.number_input('Total Biaya', min_value=0.0, value=500.0)
+    MonthlyCharges = st.sidebar.number_input('Biaya Bulanan', min_value=0.0, value=70.0)
+    TotalCharges = st.sidebar.number_input('Total Biaya', min_value=0.0, value=1000.0)
 
-    # Input Kategorikal (Sesuaikan pilihan dengan data asli Anda)
+    # Input Kategorikal (Contoh 5 fitur utama, sesuaikan jika ingin lengkap)
     Contract = st.sidebar.selectbox('Jenis Kontrak', ('Month-to-month', 'One year', 'Two year'))
     InternetService = st.sidebar.selectbox('Layanan Internet', ('DSL', 'Fiber optic', 'No'))
     PaymentMethod = st.sidebar.selectbox('Metode Pembayaran', ('Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'))
-    
-    # ... Tambahkan input lain sesuai fitur yang Anda pakai saat training ...
-    
-    # Simpan dalam DataFrame
+    OnlineSecurity = st.sidebar.selectbox('Keamanan Online', ('No', 'Yes', 'No internet service'))
+    TechSupport = st.sidebar.selectbox('Support Teknis', ('No', 'Yes', 'No internet service'))
+
+    # Kita harus membuat DataFrame dengan KOLOM LENGKAP seperti saat training
+    # Trik: Kita buat data dummy untuk kolom yang tidak diinput user agar model tidak error
     data = {
         'tenure': tenure,
         'MonthlyCharges': MonthlyCharges,
         'TotalCharges': TotalCharges,
         'Contract': Contract,
         'InternetService': InternetService,
-        'PaymentMethod': PaymentMethod
-        # ... Masukkan kolom lain di sini ...
+        'PaymentMethod': PaymentMethod,
+        'OnlineSecurity': OnlineSecurity,
+        'TechSupport': TechSupport,
+        # Default value untuk kolom lain yang tidak ada di input sidebar (agar shape sama)
+        'gender': 'Male', 'SeniorCitizen': 0, 'Partner': 'No', 'Dependents': 'No',
+        'PhoneService': 'Yes', 'MultipleLines': 'No', 'OnlineBackup': 'No',
+        'DeviceProtection': 'No', 'StreamingTV': 'No', 'StreamingMovies': 'No',
+        'PaperlessBilling': 'Yes'
     }
-    features = pd.DataFrame(data, index=[0])
-    return features
+    return pd.DataFrame(data, index=[0])
 
 input_df = user_input_features()
 
-# Tampilkan Input
-st.subheader('Data yang dimasukkan:')
+# Tampilkan Data Input
+st.subheader('Data Pelanggan:')
 st.write(input_df)
 
-# --- 4. PREDIKSI ---
-if st.button('Prediksi Sekarang'):
+# Tombol Prediksi [cite: 95]
+if st.button('Prediksi'):
     try:
+        # Lakukan prediksi
         prediction = model.predict(input_df)
+        probabilitas = model.predict_proba(input_df)
         
+        # Tampilkan Hasil [cite: 96]
         if prediction[0] == 1:
-            st.error("Hasil: Pelanggan Berpotensi CHURN (Berhenti)")
+            st.error(f"HASIL: CHURN (Berpotensi Berhenti). Probabilitas: {probabilitas[0][1]:.2f}")
         else:
-            st.success("Hasil: Pelanggan SETIA (Tidak Churn)")
+            st.success(f"HASIL: TIDAK CHURN (Pelanggan Setia). Probabilitas: {probabilitas[0][0]:.2f}")
             
     except Exception as e:
-        st.error(f"Terjadi kesalahan saat prediksi: {e}")
-        st.warning("Pastikan kolom input di app.py SAMA PERSIS dengan kolom saat training model.")
+        st.error("Terjadi kesalahan saat prediksi.")
+        st.warning(f"Detail Error: {e}")
