@@ -3,79 +3,154 @@ import pandas as pd
 import joblib
 import numpy as np
 
-# Import library Scikit-Learn agar joblib mengenali struktur model
-from sklearn.ensemble import RandomForestClassifier
+# --- IMPORT PENTING AGAR MODEL TERBACA (JANGAN DIHAPUS) ---
+# Mengimpor komponen Scikit-Learn yang kemungkinan tersimpan di dalam file .joblib
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 from sklearn.impute import SimpleImputer
 
-# Judul Aplikasi
-st.title("Telco Customer Churn Prediction")
-st.write("Aplikasi Prediksi Berhenti Langganan (UAS Data Science)")
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(
+    page_title="Telco Churn Prediction",
+    page_icon="📡",
+    layout="wide"
+)
 
-# Load Model dengan Error Handling
-try:
-    model = joblib.load('model_churn_terbaik.joblib')
-except Exception as e:
-    st.error(f"Error memuat model: {e}")
-    st.stop()
+# --- 1. PEMUATAN MODEL [cite: 93] ---
+@st.cache_resource
+def load_model():
+    try:
+        model = joblib.load('model_churn_terbaik.joblib')
+        return model
+    except Exception as e:
+        st.error(f"Gagal memuat model. Pastikan file .joblib ada. Error: {e}")
+        return None
 
-st.sidebar.header("Input Data Pelanggan")
+model = load_model()
 
-# Fungsi Input User
+# --- JUDUL & DESKRIPSI [cite: 97] ---
+st.title("📡 Aplikasi Prediksi Churn Pelanggan")
+st.markdown("""
+Aplikasi ini dirancang untuk memprediksi apakah seorang pelanggan telekomunikasi akan **berhenti berlangganan (Churn)** atau **tetap berlangganan** berdasarkan data profil dan pola penggunaan mereka.
+""")
+st.markdown("---")
+
+# --- 2. FORM INPUT FITUR (SIDEBAR) [cite: 94] ---
+st.sidebar.header("📝 Masukkan Data Pelanggan")
+
 def user_input_features():
-    # Input Numerik
-    tenure = st.sidebar.number_input('Lama Berlangganan (Bulan)', min_value=0, value=12)
-    MonthlyCharges = st.sidebar.number_input('Biaya Bulanan', min_value=0.0, value=70.0)
-    TotalCharges = st.sidebar.number_input('Total Biaya', min_value=0.0, value=1000.0)
+    # Group 1: Profil Demografis
+    st.sidebar.subheader("Profil Pelanggan")
+    gender = st.sidebar.selectbox('Gender', ('Male', 'Female'))
+    SeniorCitizen = st.sidebar.selectbox('Senior Citizen (Lansia?)', (0, 1), format_func=lambda x: "Ya" if x == 1 else "Tidak")
+    Partner = st.sidebar.selectbox('Memiliki Pasangan?', ('Yes', 'No'))
+    Dependents = st.sidebar.selectbox('Memiliki Tanggungan?', ('Yes', 'No'))
 
-    # Input Kategorikal (Contoh 5 fitur utama, sesuaikan jika ingin lengkap)
-    Contract = st.sidebar.selectbox('Jenis Kontrak', ('Month-to-month', 'One year', 'Two year'))
-    InternetService = st.sidebar.selectbox('Layanan Internet', ('DSL', 'Fiber optic', 'No'))
-    PaymentMethod = st.sidebar.selectbox('Metode Pembayaran', ('Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'))
+    # Group 2: Layanan Berlangganan
+    st.sidebar.subheader("Layanan")
+    tenure = st.sidebar.slider('Lama Berlangganan (Bulan)', 0, 72, 12)
+    PhoneService = st.sidebar.selectbox('Layanan Telepon', ('Yes', 'No'))
+    MultipleLines = st.sidebar.selectbox('Multiple Lines', ('No phone service', 'No', 'Yes'))
+    InternetService = st.sidebar.selectbox('Jenis Internet', ('DSL', 'Fiber optic', 'No'))
+    
+    # Layanan Tambahan (Hanya muncul jika punya internet, tapi kita tampilkan semua untuk kemudahan)
     OnlineSecurity = st.sidebar.selectbox('Keamanan Online', ('No', 'Yes', 'No internet service'))
+    OnlineBackup = st.sidebar.selectbox('Backup Online', ('No', 'Yes', 'No internet service'))
+    DeviceProtection = st.sidebar.selectbox('Proteksi Perangkat', ('No', 'Yes', 'No internet service'))
     TechSupport = st.sidebar.selectbox('Support Teknis', ('No', 'Yes', 'No internet service'))
+    StreamingTV = st.sidebar.selectbox('Streaming TV', ('No', 'Yes', 'No internet service'))
+    StreamingMovies = st.sidebar.selectbox('Streaming Movies', ('No', 'Yes', 'No internet service'))
 
-    # Kita harus membuat DataFrame dengan KOLOM LENGKAP seperti saat training
-    # Trik: Kita buat data dummy untuk kolom yang tidak diinput user agar model tidak error
+    # Group 3: Akun & Pembayaran
+    st.sidebar.subheader("Informasi Akun")
+    Contract = st.sidebar.selectbox('Kontrak', ('Month-to-month', 'One year', 'Two year'))
+    PaperlessBilling = st.sidebar.selectbox('Tagihan Paperless?', ('Yes', 'No'))
+    PaymentMethod = st.sidebar.selectbox('Metode Pembayaran', ('Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'))
+    MonthlyCharges = st.sidebar.number_input('Biaya Bulanan ($)', min_value=0.0, value=50.0)
+    TotalCharges = st.sidebar.number_input('Total Biaya ($)', min_value=0.0, value=tenure * 50.0)
+
+    # Menggabungkan data menjadi DataFrame
     data = {
+        'gender': gender,
+        'SeniorCitizen': SeniorCitizen,
+        'Partner': Partner,
+        'Dependents': Dependents,
         'tenure': tenure,
-        'MonthlyCharges': MonthlyCharges,
-        'TotalCharges': TotalCharges,
-        'Contract': Contract,
+        'PhoneService': PhoneService,
+        'MultipleLines': MultipleLines,
         'InternetService': InternetService,
-        'PaymentMethod': PaymentMethod,
         'OnlineSecurity': OnlineSecurity,
+        'OnlineBackup': OnlineBackup,
+        'DeviceProtection': DeviceProtection,
         'TechSupport': TechSupport,
-        # Default value untuk kolom lain yang tidak ada di input sidebar (agar shape sama)
-        'gender': 'Male', 'SeniorCitizen': 0, 'Partner': 'No', 'Dependents': 'No',
-        'PhoneService': 'Yes', 'MultipleLines': 'No', 'OnlineBackup': 'No',
-        'DeviceProtection': 'No', 'StreamingTV': 'No', 'StreamingMovies': 'No',
-        'PaperlessBilling': 'Yes'
+        'StreamingTV': StreamingTV,
+        'StreamingMovies': StreamingMovies,
+        'Contract': Contract,
+        'PaperlessBilling': PaperlessBilling,
+        'PaymentMethod': PaymentMethod,
+        'MonthlyCharges': MonthlyCharges,
+        'TotalCharges': TotalCharges
     }
-    return pd.DataFrame(data, index=[0])
+    features = pd.DataFrame(data, index=[0])
+    return features
 
+# Menampung input user
 input_df = user_input_features()
 
-# Tampilkan Data Input
-st.subheader('Data Pelanggan:')
-st.write(input_df)
+# --- TAMPILAN INPUT USER ---
+col1, col2 = st.columns([2, 1])
 
-# Tombol Prediksi [cite: 95]
-if st.button('Prediksi'):
-    try:
-        # Lakukan prediksi
-        prediction = model.predict(input_df)
-        probabilitas = model.predict_proba(input_df)
-        
-        # Tampilkan Hasil [cite: 96]
-        if prediction[0] == 1:
-            st.error(f"HASIL: CHURN (Berpotensi Berhenti). Probabilitas: {probabilitas[0][1]:.2f}")
-        else:
-            st.success(f"HASIL: TIDAK CHURN (Pelanggan Setia). Probabilitas: {probabilitas[0][0]:.2f}")
+with col1:
+    st.subheader("🔍 Review Data Pelanggan")
+    st.dataframe(input_df)
+
+# --- 3. PROSES PREDIKSI & 4. TAMPILAN HASIL [cite: 95, 96] ---
+with col2:
+    st.subheader("⚡ Prediksi")
+    predict_btn = st.button("Analisis Churn", type="primary")
+
+if predict_btn:
+    if model:
+        try:
+            # Prediksi Kelas (0 atau 1)
+            prediction = model.predict(input_df)
+            # Prediksi Probabilitas (Persentase)
+            probability = model.predict_proba(input_df)
             
-    except Exception as e:
-        st.error("Terjadi kesalahan saat prediksi.")
-        st.warning(f"Detail Error: {e}")
+            # Mengambil probabilitas churn (kelas 1)
+            churn_prob = probability[0][1]
+
+            st.markdown("### Hasil Analisis:")
+            
+            # Logika Tampilan Hasil
+            if prediction[0] == 1:
+                st.error(f"🚨 **BERPOTENSI CHURN (Berhenti)**")
+                st.write(f"Tingkat Risiko: **{churn_prob*100:.2f}%**")
+                st.progress(int(churn_prob * 100))
+                st.warning("Rekomendasi: Tawarkan diskon atau perpanjangan kontrak segera.")
+            else:
+                st.success(f"✅ **PELANGGAN SETIA (Tidak Churn)**")
+                st.write(f"Tingkat Risiko: **{churn_prob*100:.2f}%**")
+                st.progress(int(churn_prob * 100))
+                st.info("Pelanggan ini cenderung aman. Pertahankan layanan.")
+                
+        except Exception as e:
+            st.error(f"Terjadi kesalahan saat melakukan prediksi: {e}")
+            st.warning("Tips: Pastikan nama kolom input sama persis dengan dataset training.")
+    else:
+        st.error("Model belum dimuat.")
+
+# --- 5. ELEMEN PENDUKUNG (VISUALISASI/INFO) [cite: 97] ---
+st.markdown("---")
+with st.expander("ℹ️ Penjelasan Fitur Penting"):
+    st.markdown("""
+    * **Tenure**: Berapa lama pelanggan sudah berlangganan (bulan). Semakin lama, biasanya semakin setia.
+    * **Contract**: Jenis kontrak sangat mempengaruhi. Kontrak 'Month-to-month' biasanya lebih rentan Churn.
+    * **Internet Service**: Pengguna Fiber Optic seringkali memiliki tagihan lebih tinggi dan pola churn berbeda.
+    * **Monthly Charges**: Biaya bulanan yang terlalu tinggi bisa memicu pelanggan pindah ke kompetitor.
+    """)
